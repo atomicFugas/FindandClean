@@ -20,17 +20,40 @@ struct AppBundleInfo: Equatable, Sendable {
         return Array(Set(names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }))
     }
 
+    /// Generic last segments that must never be used alone for leftover matching
+    /// (e.g. `com.findandclean.app` → "app" would match all of Application Support).
+    private static let uselessIDTokens: Set<String> = [
+        "app", "apps", "osx", "mac", "macos", "desktop", "helper", "agent",
+        "service", "services", "framework", "kit", "ui", "core", "free",
+        "pro", "lite", "demo", "test", "dev", "debug", "release", "client",
+        "server", "menu", "bar", "widget", "extension", "plugin"
+    ]
+
     var bundleIDFragments: [String] {
         guard let bundleIdentifier, !bundleIdentifier.isEmpty else { return [] }
         var fragments = [bundleIdentifier]
-        let parts = bundleIdentifier.split(separator: ".")
+        let parts = bundleIdentifier.split(separator: ".").map(String.init)
         if parts.count >= 2 {
-            fragments.append(parts.suffix(2).joined(separator: "."))
+            let suffix2 = parts.suffix(2).joined(separator: ".")
+            // Keep "findandclean.app" only if the product token isn't generic.
+            let product = parts[parts.count - 2].lowercased()
+            if !Self.uselessIDTokens.contains(product) {
+                fragments.append(suffix2)
+            }
         }
-        if let last = parts.last {
-            fragments.append(String(last))
+        if let last = parts.last?.lowercased(),
+           last.count >= 5,
+           !Self.uselessIDTokens.contains(last) {
+            fragments.append(last)
         }
-        return Array(Set(fragments))
+        // Prefer a distinctive middle token (e.g. findandclean).
+        if parts.count >= 2 {
+            let product = parts[parts.count - 2]
+            if product.count >= 4, !Self.uselessIDTokens.contains(product.lowercased()) {
+                fragments.append(product)
+            }
+        }
+        return Array(Set(fragments.filter { $0.count >= 4 }))
     }
 
     var isAppleOrSystemProtected: Bool {

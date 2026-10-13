@@ -1,59 +1,76 @@
-# FindandClean
+<p align="center">
+  <img src="docs/logo.png" alt="FindandClean" width="96" height="96">
+</p>
 
-Native macOS utility that combines **auto uninstall** with **find any file search system** - **in one!**, reveal in Finder, and Trash.
+<h1 align="center">FindandClean</h1>
 
-![FindandClean](<img width="2092" height="1176" alt="iScreen Shoter - 20261013183456824" src="https://github.com/user-attachments/assets/e3794a2b-a809-4fca-acef-dd0dbdde8ec9" />)
+<p align="center">
+  <strong>Find Any File</strong>–style search + <strong>AppCleaner</strong>–style uninstall,<br>
+  in one native macOS utility.
+</p>
+
+<p align="center">
+  <a href="https://github.com/atomicFugas/FindandClean/releases/latest"><img src="https://img.shields.io/github/v/release/atomicFugas/FindandClean?style=flat-square" alt="Release"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-black?style=flat-square" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/SwiftUI-native-blue?style=flat-square" alt="SwiftUI">
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.jpg" alt="FindandClean screenshot" width="900">
+</p>
+
+---
 
 ## Download
 
-Grab the latest DMG from [Releases](../../releases) or open:
+| | |
+|---|---|
+| **Installer** | [FindandClean-1.0.1.dmg](https://github.com/atomicFugas/FindandClean/releases/latest) |
+| **Install** | Open the DMG → drag **FindandClean** into **Applications** |
 
-`dist/FindandClean-1.0.dmg`
+> **Full Disk Access** is required for deep results (e.g. `~/Library/Biome`).  
+> System Settings → Privacy & Security → Full Disk Access → enable FindandClean → quit & reopen.
 
-Drag **FindandClean** into **Applications**, then grant **Full Disk Access** (required for `~/Library/Biome` and other protected folders).
+---
 
-## Requirements
+## What it does
 
-- macOS 13 or later
-- **Full Disk Access** for reliable deep search
+### Find Files
+- Search by name (contains / starts with / equals / regex)
+- Live results while scanning
+- Foldable path tree with dates
+- Reveal, Open, Move to Trash (selected item only — not recursive)
 
-### Grant Full Disk Access
+### Uninstall
+- Drop a `.app` to open the dual pane
+- Lists related leftovers (prefs, caches, containers, agents…)
+- Check what to remove → Move to Trash
 
-1. System Settings → Privacy & Security → Full Disk Access  
-2. Enable **FindandClean** (add with + if needed)  
-3. Quit and reopen the app  
+---
 
-Sandbox is **off** so the app can scan and trash files across the filesystem.
-
-## Open & run (from source)
+## Build from source
 
 ```bash
 open FindandClean.xcodeproj
 ```
 
-Then Run (⌘R) in Xcode. Or:
+Or:
 
 ```bash
 xcodebuild -scheme FindandClean -configuration Release build
 ```
 
-## Features
-
-**Find Files (default)**
-- Opens like Find Any File: search fills the window
-- Foldable path tree with classic zebra stripes
-- Live results while searching
-- Roots: Home, Macintosh HD, Applications, or a custom folder
-- Reveal in Finder, Open, Move to Trash (non-recursive selection)
-
-**Uninstall (on demand)**
-- Drop a `.app` onto the window to switch into duo mode
-- Left: leftover scan / checklist; right: Find stays available
-- Close Uninstall (✕) to return to Find-only
+---
 
 ## Safety
 
-- Apple / SIP system apps are blocked from leftover cleaning
-- Application Support / Containers default unchecked and require confirmation
-- Volume roots are refused
-- Deletes go to Trash only (no permanent delete in v1)
+- Apple / SIP apps are blocked from leftover cleaning  
+- Sensitive folders default unchecked and need confirmation  
+- Volume roots refused  
+- Trash only — no permanent delete in v1  
+
+---
+
+<p align="center">
+  <sub>Made for macOS · not App Store / not sandboxed</sub>
+</p>

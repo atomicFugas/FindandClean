@@ -88,8 +88,9 @@ actor FileSearchEngine {
                     let fresh = seen.takeNew(batch)
                     guard !fresh.isEmpty else { return }
                     onHits(fresh)
-                    // Spotlight often returns the .app but not files inside it — deep-scan packages now.
-                    for hit in fresh where Self.isPackage(hit.url) || hit.isDirectory {
+                    // Only deep-scan real packages (.app / .bundle), never arbitrary folders
+                    // (path-wide directory scans were pulling multi‑GB trees like DerivedData).
+                    for hit in fresh where Self.isPackage(hit.url) {
                         let nested = Self.deepScanPackage(
                             hit.url,
                             name: name,
@@ -273,7 +274,11 @@ actor FileSearchEngine {
 
         var batch: [FileHit] = []
         var visited = 0
-        let skipNames: Set<String> = [".Trash", ".Trashes", "Backups.backupdb"]
+        let skipNames: Set<String> = [
+            ".Trash", ".Trashes", "Backups.backupdb",
+            ".derivedData", "DerivedData", "Index.noindex",
+            "Node Modules", "node_modules", ".git", "Pods"
+        ]
 
         for case let fileURL as URL in enumerator {
             try Task.checkCancellation()
@@ -298,7 +303,7 @@ actor FileSearchEngine {
 
             if let hit = makeHit(url: fileURL, kindExt: kindExt, query: query) {
                 batch.append(hit)
-                // Matching .app/.bundle: also pull nested name matches immediately (BatFiKit_*.bundle, etc.).
+                // Matching .app/.bundle only — not plain folders (avoids multi‑GB folder walks).
                 if isPackage(fileURL) {
                     let nested = deepScanPackage(
                         fileURL,
@@ -379,10 +384,11 @@ actor FileSearchEngine {
             let predicate: NSPredicate
             switch mode {
             case .contains:
-                // Path match helps when the leaf name embeds the query (e.g. sourceIdentifier=…BatFi).
+                // Filename / display name only — never kMDItemPath (that matched every file under
+                // a project folder named like the query, e.g. FindandClean/.derivedData → GBs).
                 predicate = NSPredicate(
-                    format: "(kMDItemFSName CONTAINS[cd] %@) OR (kMDItemDisplayName CONTAINS[cd] %@) OR (kMDItemPath CONTAINS[cd] %@)",
-                    name, name, name
+                    format: "(kMDItemFSName CONTAINS[cd] %@) OR (kMDItemDisplayName CONTAINS[cd] %@)",
+                    name, name
                 )
             case .startsWith:
                 predicate = NSPredicate(

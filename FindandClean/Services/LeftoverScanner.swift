@@ -18,6 +18,10 @@ actor LeftoverScanner {
         case bundleID
     }
 
+    /// Hard cap so one false-positive folder can't report multi‑GB "leftovers".
+    private static let maxReportedDirectoryBytes: Int64 = 2_000_000_000 // 2 GB
+    private static let maxDirectoryFileVisits = 8_000
+
     func scan(
         appURL: URL,
         progress: @Sendable (Progress) -> Void
@@ -31,7 +35,9 @@ actor LeftoverScanner {
 
         let roots = try loadRoots()
         var found: [URL: RelatedFileItem] = [:]
-        let names = info.matchNames.map { $0.lowercased() }
+        let names = info.matchNames
+            .map { $0.lowercased() }
+            .filter { $0.count >= 3 && !Self.genericNameTokens.contains($0) }
         let idFragments = info.bundleIDFragments.map { $0.lowercased() }
 
         for (index, root) in roots.enumerated() {
@@ -61,6 +67,10 @@ actor LeftoverScanner {
         return found.values.sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
     }
 
+    private static let genericNameTokens: Set<String> = [
+        "app", "apps", "helper", "agent", "service", "mac", "osx", "desktop"
+    ]
+
     private func resolveInput(_ url: URL) throws -> URL {
         let resolved = url.resolvingSymlinksInPath()
         var isDir: ObjCBool = false
@@ -70,7 +80,6 @@ actor LeftoverScanner {
         if resolved.pathExtension.lowercased() == "app" {
             return resolved
         }
-        // Allow dropping a directory that contains Contents/Info.plist
         let info = resolved.appendingPathComponent("Contents/Info.plist")
         if FileManager.default.fileExists(atPath: info.path) {
             return resolved
@@ -141,26 +150,36 @@ actor LeftoverScanner {
             options: [.skipsHiddenFiles]
         ) else { return [] }
 
-        let rootPath = root.url.path
         let rootDepth = root.url.pathComponents.count
+        let rootName = root.url.lastPathComponent.lowercased()
 
         for case let fileURL as URL in enumerator {
             let depth = fileURL.pathComponents.count - rootDepth
+            // Never treat the scan root itself as a leftover (e.g. "Application Support" ≠ app).
+            if depth == 0 { continue }
             if depth > root.maxDepth {
                 enumerator.skipDescendants()
                 continue
             }
 
-            // Never match the dropped app path again under roots.
             if fileURL.path == appPath { continue }
 
             let name = fileURL.lastPathComponent.lowercased()
+            // Guard against matching the parent folder name again if enumerator yields it.
+            if name == rootName { continue }
+
             let matched: Bool
             switch root.matchMode {
             case .bundleID:
                 matched = idFragments.contains { fragment in
-                    !fragment.isEmpty && name.contains(fragment)
-                } || names.contains { name == $0 || name.hasPrefix($0 + ".") || name.hasPrefix($0 + "-") }
+                    guard fragment.count >= 4 else { return false }
+                    return name == fragment
+                        || name.hasPrefix(fragment + ".")
+                        || name.hasPrefix(fragment + "-")
+                        || name.contains(fragment)
+                } || names.contains {
+                    name == $0 || name.hasPrefix($0 + ".") || name.hasPrefix($0 + "-")
+                }
             case .name:
                 matched = matchesName(name, names: names, idFragments: idFragments)
             }
@@ -170,7 +189,6 @@ actor LeftoverScanner {
                 if let item = makeItem(url: fileURL, category: root.category, defaultSelected: defaultSelected) {
                     results.append(item)
                 }
-                // Don't descend into matched containers/folders — treat as one unit.
                 var isDirectory = false
                 if let vals = try? fileURL.resourceValues(forKeys: [.isDirectoryKey]), vals.isDirectory == true {
                     isDirectory = true
@@ -181,29 +199,36 @@ actor LeftoverScanner {
             }
         }
 
-        // Also scan immediate children of the root if maxDepth >= 1 and nothing deep needed
-        _ = rootPath
         return results
     }
 
     private func matchesName(_ name: String, names: [String], idFragments: [String]) -> Bool {
-        for n in names where !n.isEmpty {
+        for n in names where n.count >= 3 {
             if name == n { return true }
             if name.hasPrefix(n + ".") { return true }
             if name.hasPrefix(n + "-") { return true }
-            if name.contains(n) && n.count >= 3 { return true }
-            // Preferences often: com.vendor.app.plist
+            // Require longer tokens for loose "contains" to avoid "app" / "mac" style false positives.
+            if n.count >= 5, name.contains(n) { return true }
             if name.hasSuffix(".plist") {
                 let base = String(name.dropLast(5))
-                if base == n || base.hasSuffix("." + n) || base.contains(n) { return true }
+                if base == n || base.hasSuffix("." + n) { return true }
+                if n.count >= 5, base.contains(n) { return true }
             }
-            if name.hasSuffix(".savedstate") || name.hasSuffix(".savedState".lowercased()) {
-                if name.contains(n) { return true }
+            if name.hasSuffix(".savedstate"), n.count >= 5, name.contains(n) {
+                return true
             }
         }
-        for fragment in idFragments where fragment.count >= 3 {
+        for fragment in idFragments where fragment.count >= 4 {
+            if name == fragment || name.hasPrefix(fragment + ".") || name.hasPrefix(fragment + "-") {
+                return true
+            }
             if name.contains(fragment) { return true }
-            if name.hasSuffix(".plist") && String(name.dropLast(5)).contains(fragment) { return true }
+            if name.hasSuffix(".plist") {
+                let base = String(name.dropLast(5))
+                if base == fragment || base.hasSuffix("." + fragment) || base.contains(fragment) {
+                    return true
+                }
+            }
         }
         return false
     }
@@ -218,7 +243,7 @@ actor LeftoverScanner {
         let isDir = values?.isDirectory ?? false
         let size: Int64
         if isDir {
-            size = directorySize(url)
+            size = min(directorySize(url), Self.maxReportedDirectoryBytes)
         } else {
             size = Int64(values?.totalFileAllocatedSize ?? values?.fileSize ?? 0)
         }
@@ -239,14 +264,15 @@ actor LeftoverScanner {
         guard let enumerator = fm.enumerator(
             at: url,
             includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else { return 0 }
 
         var total: Int64 = 0
         var count = 0
         for case let fileURL as URL in enumerator {
             count += 1
-            if count > 50_000 { break } // safety cap for huge trees
+            if count > Self.maxDirectoryFileVisits { break }
+            if total >= Self.maxReportedDirectoryBytes { break }
             if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
                 total += Int64(size)
             }
