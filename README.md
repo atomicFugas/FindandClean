@@ -5,7 +5,7 @@
 <h1 align="center">FindandClean</h1>
 
 <p align="center">
-  <strong>Find Any File</strong>–style search + <strong>AppCleaner</strong>–style uninstall,<br>
+  <strong>file</strong> search + <strong>auto cleaner</strong><br>
   in one native macOS utility.
 </p>
 
