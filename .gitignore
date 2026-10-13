@@ -1,0 +1,8 @@
+.derivedData/
+.pbxids
+xcuserdata/
+*.xcuserstate
+.DS_Store
+build/
+*.dSYM/
+.idea/
