@@ -1,8 +1,8 @@
 # FindandClean
 
-Native macOS utility that combines **AppCleaner-style leftover uninstall** with **Find Any File–style search**, reveal in Finder, and Trash.
+Native macOS utility that combines **auto uninstall** with **find any file search system** - **in one!**, reveal in Finder, and Trash.
 
-![FindandClean](dist/FindandClean-icon-1024.png)
+![FindandClean](<img width="2092" height="1176" alt="iScreen Shoter - 20261013183456824" src="https://github.com/user-attachments/assets/e3794a2b-a809-4fca-acef-dd0dbdde8ec9" />)
 
 ## Download
 
